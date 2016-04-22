@@ -1,0 +1,7 @@
+<use name="jpsiCounting/counting"/>
+
+<environment>
+ <bin name="runJpsiHistos" file="runJpsiHistos.cc"></bin>
+</environment>
+<Flags CXXFLAGS="-g -std=c++0x"/>
+
