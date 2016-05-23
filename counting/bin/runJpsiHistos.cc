@@ -29,55 +29,23 @@
 #include "TH1F.h"
 #include "TTreeReader.h"
 #include "TTreeReaderValue.h"
+#include "TSystem.h"
 #include <math.h>
 
 #include "TLorentzVector.h"
 #include "TParticle.h"
 #include <memory>
 #include "jpsiCounting/counting/interface/TupleReader.h"
+#include "jpsiCounting/counting/interface/RunManager.h"
+
+
 #include <bitset>
-struct runs_t {
-    // Outer Map Key:   Run Identifier
-    // Inner Map Key:   Lumi Section Identifier
-    // Inner Value:     Number of J/Psi candidates
-    // example: cand[runIdentifier][lumiSectionIdentifier] = numberOfCandidates;
-    std::map< unsigned int, std::map< unsigned int, unsigned int > >cand;
-
-    // Check if a certain run has been registered
-    bool hasRun( unsigned int run ) { return cand.count( run ); };
-
-    // Check if a certain run and lumi section have been registered
-    bool hasRunAndLumi( unsigned int run, unsigned int ls ) { return cand.count( run ) && cand[run].count( ls ); }
-
-    // Register a J/Psi candidate with given run and lumi section
-    // If no candidates have been registered before, the counter is initialized.
-    // If candidates have been registered before, the counter is incremented.
-    void registerCandidate( unsigned int run, unsigned int ls ) {
-        if( hasRunAndLumi( run, ls ) ) {
-            cand[run][ls]++;
-        } else if ( hasRun( run ) ) {
-            cand[run][ls] = 1;
-        } else {
-            cand[run] = std::map< unsigned int, unsigned int >();
-        }
-    }
-
-    int getTotalCount() {
-        int njpsi(0);
-        for( auto &perRun:cand ) {
-            for( auto &perLumiSection:perRun.second ) {
-                njpsi+=perLumiSection.second;
-            }
-        }
-        return njpsi;
-    }
-};
 
 // Read Luminosity From File
 // The file should contain two columns separated by white space
 // First column:    run number
 // Second columns:  luminosity for this run
-std::map< unsigned int, double > readLumiFile( std::string path ) {
+std::map< unsigned int, double > readLumiFile( TString path ) {
     // Map to store luminosity information
     // Key:     Run number
     // Value:   Luminosity for the run
@@ -85,6 +53,7 @@ std::map< unsigned int, double > readLumiFile( std::string path ) {
 
     unsigned int run;
     double lumi;
+    gSystem->ExpandPathName(path);
     std::ifstream f( path );
 
     if( not f ) {
@@ -105,68 +74,116 @@ std::vector<std::string> getTriggerTags( int trigger ) {
     std::bitset<16> bits( trigger );
     std::vector<std::string> tags;
     if( bits.test( 0 ) ) { tags.push_back( "_dimu16" ); }
-    if( bits.test( 3 ) ) { tags.push_back( "_dimu10" ); }
-    if( bits.test( 6 ) ) { tags.push_back( "_dimu20" ); }
-    if( bits.any() ) { tags.push_back( "_all" ); };
+    //~ if( bits.test( 3 ) ) { tags.push_back( "_dimu10" ); }
+    //~ if( bits.test( 6 ) ) { tags.push_back( "_dimu20" ); }
+    //~ if( bits.any() ) { tags.push_back( "_all" ); };
     return tags;
 }
-
-void makeStabilityPlot( runs_t runs, std::string triggerTag, std::string normTag, TFile * file ) {
-    std::cout << "Making the stability plot." << std::endl;
+TH1F* getVertexEfficiencyHisto() {
+    TFile* f = TFile::Open("${CMSSW_BASE}/src/jpsiCounting/counting/data/TnP_Vertexing__data_all__vtx_ptpair.root", "r");
+    TH1F* h_temp = (TH1F*)f->Get("tpTreeOnePair/Dimuon16_Jpsi_wrt_Dimuon6_Jpsi_NoVertexing");
+    TH1F* h_weight = (TH1F*) h_temp->Clone();
+    h_weight->SetDirectory(0);
+    f->Close();
+    return h_weight;
+}
+void makeStabilityPlot( std::vector<run> runs, std::string triggerTag, std::string normTag, TFile * file ) {
+    std::cout << "Making the xs plot." << std::endl;
 
     // Initiate the histograms
     TH1D * candidatesPerRun = new TH1D( ("candidatesPerRun" + normTag + triggerTag ).c_str(),
                                          "J/Psi candidates detected in a given run;Run Number;J/Psi Count",
-                                         runs.cand.size(), 0, runs.cand.size() );
-    TH1D * stabilityPerRun  = new TH1D( ("stabilityPerRun"  + normTag + triggerTag ).c_str(),
-                                         "Stability of Luminosity (Normalized to mean of all runs);Run Number;J/Psi Count / Luminosity",
-                                         runs.cand.size(), 0, runs.cand.size() );
+                                         runs.size(), 0, runs.size() );
+    //~ TH1D * candidatesPerRun_corr = new TH1D( ("candidatesPerRun_corr" + normTag + triggerTag ).c_str(),
+                                         //~ "J/Psi candidates detected in a given run, corrected for vertexing eff.;Run Number;J/Psi Count",
+                                         //~ runs.size(), 0, runs.size() );
+    TH1D * xsPerRun  = new TH1D( ("xsPerRun"  + normTag + triggerTag ).c_str(),
+                                         "Cross section per run divided by average;Run Number;#sigma / #sigma_{average}",
+                                         runs.size(), 0, runs.size() );
+    //~ TH1D * xsPerRun_corr  = new TH1D( ("xsPerRun_corr"  + normTag + triggerTag ).c_str(),
+                                         //~ "Stability of Luminosity (Normalized to mean of all runs), corrected for vertexing eff.;Run Number;J/Psi Count / Luminosity",
+                                         //~ runs.size(), 0, runs.size() );
     TH1D * luminosityPerRun = new TH1D( ("luminosityPerRun" + normTag + triggerTag ).c_str(),
                                          "Luminosity in run via BrilCalc;Run Number; Luminosity",
-                                         runs.cand.size(), 0, runs.cand.size() );
+                                         runs.size(), 0, runs.size() );
     TH1D * lumiSectionsPerRun = new TH1D( ("lumiSectionsPerRun" + normTag + triggerTag ).c_str(),
                                          "Luminosity sections run;Run Number; Number of Lumi Sections",
-                                         runs.cand.size(), 0, runs.cand.size() );
+                                         runs.size(), 0, runs.size() );
     // Read the luminosity information for each run from file
-    std::map< unsigned int, double > lumimap = readLumiFile( "norm/lumiPerRun"+ normTag + triggerTag + ".txt" );
+    std::map< unsigned int, double > lumimap = readLumiFile( "$CMSSW_BASE/src/jpsiCounting/counting/data/lumiPerRun"+ normTag + triggerTag + ".txt" );
 
-
+    // Read the efficiency information
+    //~ TFile* f_vtx = TFile::Open("${CMSSW_BASE}/src/jpsiCounting/counting/data/TnP_Vertexing__data_all__vtx_ptpair.root", "r");
+    //~ if( f_vtx == 0 or f_vtx->IsZombie() ) {
+        //~ std::cout << "Vertexing file not found!" << std::endl;
+        //~ return;
+    //~ }
+    //~ TH1F* h_vertexEfficiency = (TH1F*)f_vtx->Get("tpTreeOnePair/Dimuon16_Jpsi_wrt_Dimuon6_Jpsi_NoVertexing/fit_eff_plots/tag_nVertices_PLOT/");
+    //~ if( h_vertexEfficiency == NULL ) {
+        //~ std::cout << "Vertexing histogram not read!" << std::endl;
+        //~ return;
+    //~ }
     // Loop over runs
     int bin(1), nls(0);
-    for( auto &lsmap:runs.cand ) {
+    unsigned long runId(0);
+    double lumi(0.);
+    for( auto thisrun:runs ) {
+        runId=thisrun.id;
+        lumi=lumimap[runId];
+        if( lumi == 0 ) {
+            std::cout << "Found zero lumi in run: " << runId << std::endl;
+            continue;
+        }
+
         // Label the bin with the run number
-        candidatesPerRun ->GetXaxis()->SetBinLabel( bin, std::to_string( lsmap.first ).c_str() );
-        stabilityPerRun  ->GetXaxis()->SetBinLabel( bin, std::to_string( lsmap.first ).c_str() );
-        luminosityPerRun ->GetXaxis()->SetBinLabel( bin, std::to_string( lsmap.first ).c_str() );
+        candidatesPerRun ->GetXaxis()->SetBinLabel( bin, std::to_string( runId ).c_str() );
+        xsPerRun  ->GetXaxis()->SetBinLabel( bin, std::to_string( runId ).c_str() );
+        luminosityPerRun ->GetXaxis()->SetBinLabel( bin, std::to_string( runId ).c_str() );
 
         // Add up the J/Psi counts for all Lumi Sections in this run
-        int njpsi(0);
-        for( auto &ls:lsmap.second ) {
-            njpsi += ls.second;
-            nls++;
+        int njpsi = thisrun.getN();
+        //~ int njpsi_corr = thisrun.getN_weighted(h_vertexEfficiency);
+        //~ int njpsi_corr_err = thisrun.getDN_weighted(h_vertexEfficiency);
+
+        int njpsiFromLs=0;
+        for( auto ls:thisrun.lumisections ) {
+            njpsiFromLs += ls.getN();
         }
+        if( njpsi != njpsiFromLs ) { std::cout << "Mismatch: " << njpsi << " vs " << njpsiFromLs << std::endl; }
+
+
+        nls = thisrun.lumisections.size();
         candidatesPerRun->SetBinContent( bin, njpsi );
-        candidatesPerRun->SetBinError( bin, sqrt(njpsi) );
+        candidatesPerRun->SetBinError(   bin, sqrt(njpsi) );
 
-        stabilityPerRun->SetBinContent( bin, njpsi / lumimap[lsmap.first] );
-        stabilityPerRun->SetBinError( bin, sqrt(njpsi) / lumimap[lsmap.first] );
+        //~ candidatesPerRun_corr->SetBinContent( bin, njpsi_corr );
+        //~ candidatesPerRun_corr->SetBinError(   bin, njpsi_corr_err );
 
-        luminosityPerRun->SetBinContent( bin, lumimap[lsmap.first] );
-        luminosityPerRun->SetBinError( bin, 0 );
+        xsPerRun->SetBinContent( bin, njpsi / lumi );
+        xsPerRun->SetBinError(   bin, sqrt(njpsi) / lumi );
+
+        //~ xsPerRun_corr->SetBinContent( bin, njpsi_corr / lumi );
+        //~ xsPerRun_corr->SetBinError(   bin, njpsi_corr_err );
+
+        luminosityPerRun->SetBinContent( bin, lumi );
+        luminosityPerRun->SetBinError(   bin, 0 );
 
         lumiSectionsPerRun->SetBinContent( bin, nls );
-        lumiSectionsPerRun->SetBinError( bin, 0 );
+        lumiSectionsPerRun->SetBinError(   bin, 0 );
         bin++;
     }
 
-    // Normalize the stability plot to its average
-    stabilityPerRun -> Scale( luminosityPerRun->Integral() / candidatesPerRun->Integral() );
+    // Normalize the xs plot to its average
+    xsPerRun -> Scale( luminosityPerRun->Integral() / candidatesPerRun->Integral() );
 
     // Attach histograms to files
     candidatesPerRun                -> SetDirectory( file );
-    stabilityPerRun                 -> SetDirectory( file );
+    xsPerRun                 -> SetDirectory( file );
     luminosityPerRun                -> SetDirectory( file );
     lumiSectionsPerRun              -> SetDirectory( file );
+
+    //~ f_vtx->Close();
+
 }
 std::map<std::string, TH1D*> initHistoMap(std::vector<std::string> triggerTags) {
     std::map<std::string,TH1D*> histoMap;
@@ -185,24 +202,16 @@ std::map<std::string, TH1D*> initHistoMap(std::vector<std::string> triggerTags) 
 
     return histoMap;
 }
-std::map<std::string, runs_t> initRunsMap(std::vector<std::string> triggerTags ) {
-    std::map<std::string,runs_t> runsMap;
-    for( auto &triggerTag:triggerTags ) {
-            runsMap[ triggerTag ] = runs_t();
-    }
-    return runsMap;
-}
 
 int main(int argc, char* argv[])
 {
     std::cout << "runJpsiHistos: Preparations." << std::endl;
     // Initialize a bunch of stuff
-    std::vector<std::string> triggerTags = {"_dimu16","_dimu10","_dimu20", "_all"};
+    //~ std::vector<std::string> triggerTags = {"_dimu16","_dimu10","_dimu20", "_all"};
+    std::vector<std::string> triggerTags = {"_dimu16"};
     std::vector<std::string> normTags = {"_moriond","_dtv2"};
     TFile * outputFile = TFile::Open("jpsi_histos.root", "RECREATE");
     std::map<std::string,TH1D*> histoMap = initHistoMap( triggerTags );
-    std::map<std::string,runs_t> runsMap = initRunsMap( triggerTags );
-
 
 
     // Input is a list of paths to files
@@ -213,6 +222,7 @@ int main(int argc, char* argv[])
         inputFiles.push_back( mystring );
     }
 
+    RunManager manager;
 
     std::cout << "runJpsiHistos: Working on a total of '" << inputFiles.size() << "' files." << std::endl;
 
@@ -224,7 +234,13 @@ int main(int argc, char* argv[])
         std::vector<std::string> triggerTags = getTriggerTags( reader.m_trigger );
 
         // Cut on mass
-        if( reader.m_dimuon_p4->M() > 3.3 or reader.m_dimuon_p4->M() < 2.9 ) continue;
+        if( reader.m_dimuon_p4->M() > 3.097+0.05 or reader.m_dimuon_p4->M() < 3.097-0.05 ) continue;
+        // Cut on Muon Pt
+        if( std::max(reader.m_muonP_p4->Pt(),reader.m_muonP_p4->Pt()) < 10 ) continue;
+        if( std::min(reader.m_muonP_p4->Pt(),reader.m_muonP_p4->Pt()) < 10 ) continue;
+        // Cut on Dimuon Pt
+        if( ( reader.m_dimuon_p4->Pt() < 20 ) ) continue;
+        if( abs( reader.m_dimuon_p4->Eta() ) > 1.5 ) continue;
 
         for( auto &triggerTag:triggerTags ) {
                 histoMap["rec_pt_mu1"   + triggerTag] -> Fill( reader.m_muonN_p4->Pt() );
@@ -234,36 +250,19 @@ int main(int argc, char* argv[])
                 histoMap["rec_eta_mu2"  + triggerTag] -> Fill( reader.m_muonP_p4->Eta() );
                 histoMap["rec_eta_dimu" + triggerTag] -> Fill( reader.m_dimuon_p4->Eta() );
                 histoMap["rec_mass_dimu"+ triggerTag] -> Fill( reader.m_dimuon_p4->M() );
-
-                runsMap[triggerTag].registerCandidate( reader.m_run, reader.m_lumiblock );
         }
+        if( triggerTags.size() ) {
+            manager.registerCandidate( reader.m_run, reader.m_lumiblock, reader.m_dimuon_p4, reader.m_nvtx );
+        }
+
     }
     std::cout << "runJpsiHistos: Event loop finished." << std::endl;
 
-    std::cout << "runJpsiHistos: Make JPsi Count/Lumi/Stability Histograms." << std::endl;
-    for( auto &normTag : normTags ){
-        for( auto &runs_it : runsMap ) {
-            makeStabilityPlot( runs_it.second, runs_it.first, normTag, outputFile );
-        }
-    }
+    std::string normtag="_moriond";
+    makeStabilityPlot( manager.getRuns(), "_dimu16",normtag, outputFile);
 
-    std::cout << "runJpsiHistos: Finishing up." << std::endl;
+    manager.setOutputFile(outputFile);
     outputFile->Write();
     outputFile->Close();
-
-    // Print the number of runs, lumi sections and J/Psi candidates we have registered
-    int nrun(0), nls(0), njpsi(0);
-    for( auto &lsmap:runsMap["_all"].cand ) {
-        nrun++;
-        for( auto &ls:lsmap.second ) {
-            nls++;
-            njpsi += ls.second;
-        }
-    }
-
-
-    std::cout << "runJpsiHistos: Observed " << nrun << " runs, " << nls << " lumi sections and " << njpsi << " J/Psi candidates." << std::endl;
-    std::cout << "runJpsiHistos: Exiting." << std::endl;
-
     return 1;
 }
