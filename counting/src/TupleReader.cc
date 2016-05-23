@@ -44,6 +44,7 @@ bool TupleReader::openNextFile() {
    m_tree ->SetBranchAddress( "dimuon_p4", &m_dimuon_p4 );
 
    m_tree -> SetBranchAddress( "trigger", &m_trigger );
+   m_tree -> SetBranchAddress( "numPrimaryVertices", &m_nvtx );
    m_eventsInTree = m_tree -> GetEntries();
    m_currentEvent = 0;
 

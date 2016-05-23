@@ -43,7 +43,7 @@ class TupleReader{
       bool openNextFile();
       TLorentzVector *m_muonN_p4, *m_muonP_p4, *m_dimuon_p4;
       ULong64_t m_event;
-      UInt_t m_run, m_lumiblock, m_trigger;
+      UInt_t m_run, m_lumiblock, m_trigger, m_nvtx;
       
    private:
       TBranch *m_branch_muonN_p4, *m_branch_muonP_p4, *m_branch_dimuon_p4;
