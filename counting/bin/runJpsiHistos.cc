@@ -226,43 +226,75 @@ int main(int argc, char* argv[])
 
     std::cout << "runJpsiHistos: Working on a total of '" << inputFiles.size() << "' files." << std::endl;
 
+
+
+
     // Initiate the reader and start event loop
     TupleReader reader( inputFiles );
 
     std::cout << "runJpsiHistos: Starting Event Loop." << std::endl;
     while( reader.nextEvent() ) {
+        // Check for Triggers
         std::vector<std::string> triggerTags = getTriggerTags( reader.m_trigger );
+        if( not triggerTags.size() ) continue;
+
+
+        // Order muons by pT
+        TLorentzVector *mu1, *mu2;
+        if ( reader.m_muonP_p4->Pt() > reader.m_muonN_p4->Pt() ) {
+            mu1 = reader.m_muonP_p4;
+            mu2 = reader.m_muonN_p4;
+        } else {
+            mu1 = reader.m_muonN_p4;
+            mu2 = reader.m_muonP_p4;
+        }
 
         // Cut on mass
-        if( reader.m_dimuon_p4->M() > 3.097+0.05 or reader.m_dimuon_p4->M() < 3.097-0.05 ) continue;
+        if( reader.m_dimuon_p4->M() > (3.097+0.05) or reader.m_dimuon_p4->M() < (3.097-0.05) ) continue;
         // Cut on Muon Pt
-        if( std::max(reader.m_muonP_p4->Pt(),reader.m_muonP_p4->Pt()) < 10 ) continue;
-        if( std::min(reader.m_muonP_p4->Pt(),reader.m_muonP_p4->Pt()) < 10 ) continue;
+        if( mu1->Pt() < 11 ) continue;
+        if( mu2->Pt() < 4.5 ) continue;
+
+        // Cut on Muon Eta
+        if( fabs(mu1->Eta()) > 2.1 ) continue;
+        if( fabs(mu2->Eta()) > 2.1 ) continue;
+
         // Cut on Dimuon Pt
-        if( ( reader.m_dimuon_p4->Pt() < 20 ) ) continue;
-        if( abs( reader.m_dimuon_p4->Eta() ) > 1.5 ) continue;
+        //~ if( ( reader.m_dimuon_p4->Pt() < 20 ) ) continue;
+        //~ if( ( reader.m_dimuon_vProb > 0.05 ) ) continue;
+        //~ if( fabs( reader.m_dimuon_p4->Eta() ) > 1.5 ) continue;
 
+        if ( reader.m_dimuon_vProb < 0.01 ) continue;
         for( auto &triggerTag:triggerTags ) {
-                histoMap["rec_pt_mu1"   + triggerTag] -> Fill( reader.m_muonN_p4->Pt() );
-                histoMap["rec_pt_mu2"   + triggerTag] -> Fill( reader.m_muonP_p4->Pt() );
-                histoMap["rec_pt_dimu"  + triggerTag] -> Fill( reader.m_dimuon_p4->Pt() );
-                histoMap["rec_eta_mu1"  + triggerTag] -> Fill( reader.m_muonN_p4->Eta() );
-                histoMap["rec_eta_mu2"  + triggerTag] -> Fill( reader.m_muonP_p4->Eta() );
-                histoMap["rec_eta_dimu" + triggerTag] -> Fill( reader.m_dimuon_p4->Eta() );
-                histoMap["rec_mass_dimu"+ triggerTag] -> Fill( reader.m_dimuon_p4->M() );
-        }
-        if( triggerTags.size() ) {
-            manager.registerCandidate( reader.m_run, reader.m_lumiblock, reader.m_dimuon_p4, reader.m_nvtx );
-        }
+            histoMap["rec_pt_mu1"   + triggerTag] -> Fill( mu1->Pt() );
+            histoMap["rec_pt_mu2"   + triggerTag] -> Fill( mu2->Pt() );
+            histoMap["rec_pt_dimu"  + triggerTag] -> Fill( reader.m_dimuon_p4->Pt() );
 
+            histoMap["rec_eta_mu1"  + triggerTag] -> Fill( mu1->Eta() );
+            histoMap["rec_eta_mu2"  + triggerTag] -> Fill( mu2->Eta() );
+            histoMap["rec_eta_dimu" + triggerTag] -> Fill( reader.m_dimuon_p4->Eta() );
+
+            histoMap["rec_mass_dimu"+ triggerTag] -> Fill( reader.m_dimuon_p4->M() );
+        }
+        manager.registerCandidate( reader.m_run, reader.m_lumiblock, reader.m_dimuon_p4, reader.m_nvtx, reader );
     }
     std::cout << "runJpsiHistos: Event loop finished." << std::endl;
 
     std::string normtag="_moriond";
-    makeStabilityPlot( manager.getRuns(), "_dimu16",normtag, outputFile);
+//~
+    //~ TFile * outputFile_noEff = TFile::Open("jpsi_histos_noEff.root", "RECREATE");
+    //~ makeStabilityPlot( manager.getRuns(), "_dimu16",normtag, outputFile_noEff, false);
+    //~ outputFile_noEff->Write();
+    //~ outputFile_noEff->Close();
+
+    makeStabilityPlot( manager.getRuns(), "_dimu10",normtag, outputFile, false);
+
+
+
 
     manager.setOutputFile(outputFile);
     outputFile->Write();
     outputFile->Close();
+
     return 1;
 }
