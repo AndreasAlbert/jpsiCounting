@@ -1,45 +1,22 @@
 // system include files
 #include <memory>
-
-// user include files
-//~ #include "FWCore/Framework/interface/Frameworkfwd.h"
-//~ #include "FWCore/Framework/interface/EDAnalyzer.h"
-//~ #include "FWCore/Framework/interface/Event.h"
-//~ #include "FWCore/Framework/interface/MakerMacros.h"
-//~ #include "FWCore/ParameterSet/interface/ParameterSet.h"
-//~ #include "FWCore/ServiceRegistry/interface/Service.h"
-//~
-//~ #include "DataFormats/PatCandidates/interface/CompositeCandidate.h"
-//~ #include "DataFormats/PatCandidates/interface/PackedGenParticle.h"
-//~ #include "DataFormats/PatCandidates/interface/Muon.h"
-//~ #include "DataFormats/Candidate/interface/Candidate.h"
-//~ #include "DataFormats/HepMCCandidate/interface/GenParticleFwd.h"
-//~ #include "DataFormats/VertexReco/interface/VertexFwd.h"
-//~
-//~ #include "DataFormats/Common/interface/TriggerResults.h"
-//~ #include "FWCore/Common/interface/TriggerNames.h"
-//~
-//~ #include "CommonTools/UtilAlgos/interface/TFileService.h"
-//~ #include "TLorentzVector.h"
-//~ #include "TTree.h"
-
-
+#include <math.h>
+#include <bitset>
 
 #include "TFile.h"
 #include "TH1F.h"
 #include "TTreeReader.h"
 #include "TTreeReaderValue.h"
 #include "TSystem.h"
-#include <math.h>
-
+#include "TCanvas.h"
+#include "TGraphAsymmErrors.h"
 #include "TLorentzVector.h"
 #include "TParticle.h"
-#include <memory>
+
 #include "jpsiCounting/counting/interface/TupleReader.h"
 #include "jpsiCounting/counting/interface/RunManager.h"
 
 
-#include <bitset>
 
 // Read Luminosity From File
 // The file should contain two columns separated by white space
