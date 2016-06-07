@@ -37,11 +37,12 @@ bool TupleReader::openNextFile() {
    m_tree ->SetBranchAddress( "run",         &m_run );
    m_tree ->SetBranchAddress( "lumiblock",   &m_lumiblock );
    m_tree ->SetBranchAddress( "event",       &m_event );
-   
+
 
    m_tree ->SetBranchAddress( "muonN_p4", &m_muonN_p4 );
    m_tree ->SetBranchAddress( "muonP_p4", &m_muonP_p4 );
    m_tree ->SetBranchAddress( "dimuon_p4", &m_dimuon_p4 );
+   m_tree ->SetBranchAddress( "vProb", &m_dimuon_vProb );
 
    m_tree -> SetBranchAddress( "trigger", &m_trigger );
    m_tree -> SetBranchAddress( "numPrimaryVertices", &m_nvtx );

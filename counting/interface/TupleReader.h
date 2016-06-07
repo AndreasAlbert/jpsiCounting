@@ -29,8 +29,8 @@
 #include "CommonTools/UtilAlgos/interface/TFileService.h"
 #include "TLorentzVector.h"
 #include "TTree.h"
-//~ #ifndef TUPLEREADER_h
-//~ #define TUPLEREADER_h
+#ifndef TUPLEREADER_h
+#define TUPLEREADER_h
 
 class TupleReader{
    public:
@@ -44,9 +44,8 @@ class TupleReader{
       TLorentzVector *m_muonN_p4, *m_muonP_p4, *m_dimuon_p4;
       ULong64_t m_event;
       UInt_t m_run, m_lumiblock, m_trigger, m_nvtx;
-      
+      Float_t m_dimuon_vProb;
    private:
-      TBranch *m_branch_muonN_p4, *m_branch_muonP_p4, *m_branch_dimuon_p4;
       int m_eventsInTree, m_currentEvent;
       
       TFile * m_currentFile;
@@ -55,4 +54,4 @@ class TupleReader{
       TTree *m_tree;
       
 };
-//~ #endif
+#endif
