@@ -64,7 +64,7 @@ TH1F* getVertexEfficiencyHisto() {
     f->Close();
     return h_weight;
 }
-void makeStabilityPlot( std::vector<run> runs, std::string triggerTag, std::string normTag, TFile * file ) {
+void makeStabilityPlot( std::vector<run> runs, std::string triggerTag, std::string normTag, TFile * file, bool doEfficiencies ) {
     std::cout << "Making the xs plot." << std::endl;
 
     // Initiate the histograms
@@ -88,18 +88,24 @@ void makeStabilityPlot( std::vector<run> runs, std::string triggerTag, std::stri
                                          runs.size(), 0, runs.size() );
     // Read the luminosity information for each run from file
     std::map< unsigned int, double > lumimap = readLumiFile( "$CMSSW_BASE/src/jpsiCounting/counting/data/lumiPerRun"+ normTag + triggerTag + ".txt" );
+    /*
+    //// Read the efficiency information
+    // ID
+    TFile * f_id = TFile::Open("/user/albert/lumi/CMSSW_7_6_3_patch2/src/MuonAnalysis/TagAndProbe/crab/TnP_MuonID__data_all__Soft2012_vtx.root","R");
+    TCanvas * c_id  = (TCanvas*) f_id->Get("tpTree/Soft2012_vtx_Mu7p5_Track2_Jpsi/fit_eff_plots/tag_nVertices_PLOT_tag_Mu7p5_Track2_Jpsi_MU_pass");
+    TGraphAsymmErrors* eff_id = (TGraphAsymmErrors*) c_id->GetPrimitive("hxy_fit_eff");
 
-    // Read the efficiency information
-    //~ TFile* f_vtx = TFile::Open("${CMSSW_BASE}/src/jpsiCounting/counting/data/TnP_Vertexing__data_all__vtx_ptpair.root", "r");
-    //~ if( f_vtx == 0 or f_vtx->IsZombie() ) {
-        //~ std::cout << "Vertexing file not found!" << std::endl;
-        //~ return;
-    //~ }
-    //~ TH1F* h_vertexEfficiency = (TH1F*)f_vtx->Get("tpTreeOnePair/Dimuon16_Jpsi_wrt_Dimuon6_Jpsi_NoVertexing/fit_eff_plots/tag_nVertices_PLOT/");
-    //~ if( h_vertexEfficiency == NULL ) {
-        //~ std::cout << "Vertexing histogram not read!" << std::endl;
-        //~ return;
-    //~ }
+    // Tracking
+    TFile * f_trk = TFile::Open("/user/albert/lumi/CMSSW_7_6_3_patch2/src/MuonAnalysis/TagAndProbe/crab/TnP_Tracking__data_all__vtx_trk.root","R");
+    TCanvas * c_trk = (TCanvas*) f_trk->Get("tpTreeSta/eff_DR1p0_DEta0p4/fit_eff_plots/tag_nVertices_PLOT_Mu7p5_L2Mu2_Jpsi_L2_pass_&_tag_Mu7p5_L2Mu2_Jpsi_MU_pass");
+    TGraphAsymmErrors* eff_trk = (TGraphAsymmErrors*) c_trk->GetPrimitive("hxy_fit_eff");
+
+    // Vertexing
+    TFile * f_vtx = TFile::Open("/user/albert/lumi/CMSSW_7_6_3_patch2/src/MuonAnalysis/TagAndProbe/crab/TnP_Vertexing__data_all__vtx_ptpair.root","R");
+    TCanvas * c_vtx = (TCanvas*) f_vtx->Get("tpTreeOnePair/Dimuon16_Jpsi_wrt_Dimuon6_Jpsi_NoVertexing/fit_eff_plots/tag_nVertices_PLOT_Dimuon6_Jpsi_NoVertexing_pass_&_tag_Dimuon6_Jpsi_NoVertexing_pass");
+    TGraphAsymmErrors* eff_vtx = (TGraphAsymmErrors*) c_vtx->GetPrimitive("hxy_fit_eff");
+    */
+
     // Loop over runs
     int bin(1), nls(0);
     unsigned long runId(0);
@@ -118,29 +124,39 @@ void makeStabilityPlot( std::vector<run> runs, std::string triggerTag, std::stri
         luminosityPerRun ->GetXaxis()->SetBinLabel( bin, std::to_string( runId ).c_str() );
 
         // Add up the J/Psi counts for all Lumi Sections in this run
-        int njpsi = thisrun.getN();
-        //~ int njpsi_corr = thisrun.getN_weighted(h_vertexEfficiency);
-        //~ int njpsi_corr_err = thisrun.getDN_weighted(h_vertexEfficiency);
+        TH1F* h = thisrun.h_nvtx;
+        double eff1(1.), eff2(1.), eff3(1.);
+        double deff1(0.), deff2(0.), deff3(0.);
+        double njpsi(0.),dnjpsisqr(0.);
 
-        int njpsiFromLs=0;
-        for( auto ls:thisrun.lumisections ) {
-            njpsiFromLs += ls.getN();
+        for( int i = 1; i < h -> GetNbinsX(); i++ ){
+            /*
+            getValuefromTGraph( h->GetBinCenter(i), eff_id, eff1, deff1 );
+            getValuefromTGraph( h->GetBinCenter(i), eff_trk, eff2, deff2 );
+            getValuefromTGraph( h->GetBinCenter(i), eff_vtx, eff3, deff3 );
+            */
+            double this_njpsi(0.), this_dnjpsisqr(0.);
+            if( doEfficiencies ) {
+                this_njpsi = h->GetBinContent(i) / (eff1 * eff2 * eff3 );
+                this_dnjpsisqr = pow(this_njpsi,2) * (1 / this_njpsi + pow( deff1 / eff1, 2 )+ pow( deff2 / eff2, 2 )+ pow( deff3 / eff3, 2 ));
+            } else {
+                this_njpsi = h->GetBinContent(i);
+                this_dnjpsisqr = this_njpsi;
+            }
+            //~ std::cout << this_njpsi << " " << sqrt(this_dnjpsisqr) << std::endl;
+            if( this_njpsi > 0 ) {
+                njpsi += this_njpsi;
+                dnjpsisqr += this_dnjpsisqr;
+            }
+
         }
-        if( njpsi != njpsiFromLs ) { std::cout << "Mismatch: " << njpsi << " vs " << njpsiFromLs << std::endl; }
-
 
         nls = thisrun.lumisections.size();
         candidatesPerRun->SetBinContent( bin, njpsi );
-        candidatesPerRun->SetBinError(   bin, sqrt(njpsi) );
-
-        //~ candidatesPerRun_corr->SetBinContent( bin, njpsi_corr );
-        //~ candidatesPerRun_corr->SetBinError(   bin, njpsi_corr_err );
+        candidatesPerRun->SetBinError(   bin, sqrt(dnjpsisqr) );
 
         xsPerRun->SetBinContent( bin, njpsi / lumi );
-        xsPerRun->SetBinError(   bin, sqrt(njpsi) / lumi );
-
-        //~ xsPerRun_corr->SetBinContent( bin, njpsi_corr / lumi );
-        //~ xsPerRun_corr->SetBinError(   bin, njpsi_corr_err );
+        xsPerRun->SetBinError(   bin, sqrt(dnjpsisqr) / lumi );
 
         luminosityPerRun->SetBinContent( bin, lumi );
         luminosityPerRun->SetBinError(   bin, 0 );
@@ -151,16 +167,23 @@ void makeStabilityPlot( std::vector<run> runs, std::string triggerTag, std::stri
     }
 
     // Normalize the xs plot to its average
-    xsPerRun -> Scale( luminosityPerRun->Integral() / candidatesPerRun->Integral() );
+    std::vector<float> cross_sections;
+    for(int i=1; i<luminosityPerRun->GetNbinsX(); i++) {
+        cross_sections.push_back( candidatesPerRun->GetBinContent (i) / luminosityPerRun->GetBinContent(i) );
+    }
+    std::nth_element(cross_sections.begin(), cross_sections.begin() + cross_sections.size()/2, cross_sections.end());
+    xsPerRun -> Scale( 1 / cross_sections[cross_sections.size()/2] );
 
     // Attach histograms to files
-    candidatesPerRun                -> SetDirectory( file );
-    xsPerRun                 -> SetDirectory( file );
-    luminosityPerRun                -> SetDirectory( file );
-    lumiSectionsPerRun              -> SetDirectory( file );
-
-    //~ f_vtx->Close();
-
+    candidatesPerRun    -> SetDirectory( file );
+    xsPerRun            -> SetDirectory( file );
+    luminosityPerRun    -> SetDirectory( file );
+    lumiSectionsPerRun  -> SetDirectory( file );
+/*
+    f_id->Close();
+    f_vtx->Close();
+    f_trk->Close();
+*/
 }
 std::map<std::string, TH1D*> initHistoMap(std::vector<std::string> triggerTags) {
     std::map<std::string,TH1D*> histoMap;
